@@ -1,4 +1,4 @@
-// BatteryHealthReport.tsx - Restored Original Implementation
+// BatteryHealthReport.tsx - Fixed to handle object marketImpact
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -27,7 +27,11 @@ interface HealthData {
   strengths: string[];
   concerns: string[];
   recommendations: string[];
-  marketImpact: string;
+  marketImpact: string | {
+    estimatedValueImpact: any;
+    warrantyStatus: any;
+    expectedLifeRemaining: any;
+  };
 }
 
 interface BatteryHealthReportProps {
@@ -61,6 +65,33 @@ const BatteryHealthReport: React.FC<BatteryHealthReportProps> = ({ route, naviga
     });
   };
 
+  // Helper function to format market impact
+  const formatMarketImpact = (marketImpact: any): string => {
+    if (typeof marketImpact === 'string') {
+      return marketImpact;
+    }
+    
+    if (typeof marketImpact === 'object' && marketImpact !== null) {
+      const parts = [];
+      
+      if (marketImpact.estimatedValueImpact) {
+        parts.push(`Estimated Value Impact: ${typeof marketImpact.estimatedValueImpact === 'object' ? JSON.stringify(marketImpact.estimatedValueImpact) : marketImpact.estimatedValueImpact}`);
+      }
+      
+      if (marketImpact.warrantyStatus) {
+        parts.push(`Warranty Status: ${typeof marketImpact.warrantyStatus === 'object' ? JSON.stringify(marketImpact.warrantyStatus) : marketImpact.warrantyStatus}`);
+      }
+      
+      if (marketImpact.expectedLifeRemaining) {
+        parts.push(`Expected Life Remaining: ${typeof marketImpact.expectedLifeRemaining === 'object' ? JSON.stringify(marketImpact.expectedLifeRemaining) : marketImpact.expectedLifeRemaining}`);
+      }
+      
+      return parts.length > 0 ? parts.join('\n\n') : 'Market impact data available';
+    }
+    
+    return 'Market impact information not available';
+  };
+
   const fetchHealthAssessment = async () => {
     try {
       setLoading(true);
@@ -83,7 +114,7 @@ const BatteryHealthReport: React.FC<BatteryHealthReportProps> = ({ route, naviga
         strengths: assessment.strengths,
         concerns: assessment.concerns,
         recommendations: assessment.recommendations,
-        marketImpact: assessment.marketImpact,
+        marketImpact: assessment.marketImpact, // Keep as-is, we'll format it when rendering
       });
       
       console.log('✅ Battery health assessment complete!');
@@ -108,6 +139,8 @@ const BatteryHealthReport: React.FC<BatteryHealthReportProps> = ({ route, naviga
 
   const exportReport = async () => {
     if (!healthData) return;
+
+    const marketImpactText = formatMarketImpact(healthData.marketImpact);
 
     const reportText = `
 Tesla Battery Health Report
@@ -135,7 +168,7 @@ RECOMMENDATIONS:
 ${healthData.recommendations.map(r => `• ${r}`).join('\n')}
 
 MARKET IMPACT:
-${healthData.marketImpact}
+${marketImpactText}
 
 Note: This assessment is based on available vehicle data and industry standards.
 For definitive battery health evaluation, consider professional inspection.
@@ -325,10 +358,10 @@ For definitive battery health evaluation, consider professional inspection.
         ))}
       </View>
 
-      {/* Market Impact */}
+      {/* Market Impact - FIXED */}
       <View style={styles.marketSection}>
         <Text style={styles.sectionTitle}>Market Impact</Text>
-        <Text style={styles.marketText}>{healthData.marketImpact}</Text>
+        <Text style={styles.marketText}>{formatMarketImpact(healthData.marketImpact)}</Text>
       </View>
 
       {/* Actions */}

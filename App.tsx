@@ -1,6 +1,6 @@
 import React from 'react';
-import VehicleListScreen from './src/screens/VehicleListScreen';
+import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
-  return <VehicleListScreen />;
+  return <AppNavigator />;
 }
