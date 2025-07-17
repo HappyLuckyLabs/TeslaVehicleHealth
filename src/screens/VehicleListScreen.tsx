@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useNavigation } from '@react-navigation/native';
 import teslaAuth from '../services/ExpoTeslaAuthService';
+import AlgorithmComparisonScreen from '../components/AlgorithmComparisonScreen';
 
 export default function VehicleListScreen() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const navigation = useNavigation();
+  const [showComparison, setShowComparison] = useState<{vehicleId: string; vehicleName: string} | null>(null);
 
   const handleTeslaLogin = async () => {
     try {
@@ -50,6 +50,10 @@ export default function VehicleListScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCompareAlgorithms = (vehicleId: string, vehicleName: string) => {
+    setShowComparison({ vehicleId, vehicleName });
   };
 
   return (
@@ -94,19 +98,15 @@ export default function VehicleListScreen() {
                       {loading ? 'Loading...' : 'Get Vehicle Data'}
                     </Text>
                   </TouchableOpacity>
-                  {/* Battery Health Report Button */}
                   <TouchableOpacity
-                    style={[styles.button, styles.healthReportButton]}
-                    onPress={() => navigation.navigate('BatteryHealthReport', {
-                      vehicleId: vehicle.id,
-                      vehicleName: vehicle.display_name,
-                      vin: vehicle.vin
-                    })}
+                    style={[styles.button, styles.comparisonButton]}
+                    onPress={() => handleCompareAlgorithms(vehicle.id, vehicle.display_name)}
                   >
-                    <Text style={styles.buttonText}>
-                      View Battery Health Report
-                    </Text>
+                    <Text style={styles.buttonText}>🔬 Compare Algorithms</Text>
                   </TouchableOpacity>
+                  {showComparison && showComparison.vehicleId === vehicle.id && (
+                    <AlgorithmComparisonScreen vehicleId={vehicle.id} vehicleName={vehicle.display_name} />
+                  )}
                 </View>
               ))}
             </ScrollView>
@@ -212,5 +212,9 @@ const styles = StyleSheet.create({
   healthReportButton: {
     backgroundColor: '#FFD600',
     marginTop: 10,
+  },
+  comparisonButton: {
+    backgroundColor: '#FF9500', // Orange color to distinguish from main button
+    marginTop: 8,
   },
 }); 

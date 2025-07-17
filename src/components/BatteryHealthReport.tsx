@@ -1,3 +1,4 @@
+// BatteryHealthReport.tsx - Restored Original Implementation
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -5,86 +6,124 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
   Alert,
   Share,
 } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
-import batteryHealthService from '../services/BatteryHealthService';
-import type { BatteryHealthData } from '../services/BatteryHealthService';
+import BatteryHealthService from '../services/BatteryHealthService';
 import BatteryDebugScreen from './BatteryDebugScreen';
 
-interface BatteryHealthReportParams {
-  vehicleId: string;
-  vehicleName: string;
-  vin: string;
+interface HealthData {
+  overallHealthScore: number;
+  healthGrade: string;
+  capacityDegradation: number;
+  rangeDegradation: number;
+  estimatedCycles: number;
+  batteryLevel: number;
+  estimatedRange: number;
+  epaRange: number;
+  totalMileage: number;
+  chargingState: string;
+  strengths: string[];
+  concerns: string[];
+  recommendations: string[];
+  marketImpact: string;
 }
 
-const BatteryHealthReport: React.FC = () => {
-  const route = useRoute<RouteProp<Record<string, BatteryHealthReportParams>, string>>();
-  const { vehicleId, vehicleName, vin } = route.params;
-  const [healthData, setHealthData] = useState<BatteryHealthData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
-
-  const fetchHealthAssessment = async () => {
-    try {
-      setLoading(true);
-      const data = await batteryHealthService.getBatteryHealthAssessment(vehicleId);
-      setHealthData(data);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to fetch battery health data');
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+interface BatteryHealthReportProps {
+  route: {
+    params: {
+      vehicleId: string;
+      vehicleName: string;
+      vin: string;
+    };
   };
+  navigation: any;
+}
+
+const BatteryHealthReport: React.FC<BatteryHealthReportProps> = ({ route, navigation }) => {
+  const { vehicleId, vehicleName, vin } = route.params;
+  const [healthData, setHealthData] = useState<HealthData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     fetchHealthAssessment();
   }, [vehicleId]);
 
-  const getHealthColor = (score: number): string => {
-    if (score >= 90) return '#4CAF50'; // Green
-    if (score >= 75) return '#8BC34A'; // Light Green  
-    if (score >= 60) return '#FF9800'; // Orange
-    return '#F44336'; // Red
+  // Add Algorithm Comparison Navigation
+  const navigateToAlgorithmComparison = () => {
+    navigation.navigate('AlgorithmComparison', {
+      vehicleId,
+      vehicleName,
+      vin
+    });
   };
 
-  const getGradeColor = (grade: string): string => {
-    switch (grade) {
-      case 'Excellent': return '#4CAF50';
-      case 'Good': return '#8BC34A';
-      case 'Fair': return '#FF9800';
-      case 'Poor': return '#F44336';
-      default: return '#666666';
+  const fetchHealthAssessment = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔋 Starting battery health assessment...');
+      const assessment = await BatteryHealthService.getBatteryHealthAssessment(vehicleId);
+      
+      setHealthData({
+        overallHealthScore: assessment.overallHealthScore,
+        healthGrade: assessment.healthGrade,
+        capacityDegradation: assessment.capacityDegradation,
+        rangeDegradation: assessment.rangeDegradation,
+        estimatedCycles: assessment.estimatedCycles,
+        batteryLevel: assessment.batteryLevel,
+        estimatedRange: assessment.estimatedRange,
+        epaRange: assessment.epaRange,
+        totalMileage: assessment.totalMileage,
+        chargingState: assessment.chargingState,
+        strengths: assessment.strengths,
+        concerns: assessment.concerns,
+        recommendations: assessment.recommendations,
+        marketImpact: assessment.marketImpact,
+      });
+      
+      console.log('✅ Battery health assessment complete!');
+      
+    } catch (err) {
+      console.error('❌ Health assessment failed:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Assessment failed';
+      setError(errorMessage);
+      
+      Alert.alert(
+        'Assessment Error',
+        errorMessage,
+        [
+          { text: 'Retry', onPress: fetchHealthAssessment },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   const exportReport = async () => {
     if (!healthData) return;
 
-    const report = `
-TESLA BATTERY HEALTH REPORT
-${vehicleName} (${vin})
+    const reportText = `
+Tesla Battery Health Report
+Vehicle: ${vehicleName}
+VIN: ${vin}
 Generated: ${new Date().toLocaleDateString()}
 
-OVERALL HEALTH: ${healthData.overallHealthScore}/100 (${healthData.healthGrade})
+OVERALL HEALTH SCORE: ${healthData.overallHealthScore}/100 (${healthData.healthGrade})
 
-BATTERY CONDITION:
-• Current Capacity: ${healthData.usableCapacity.toFixed(1)} kWh
+KEY METRICS:
 • Capacity Degradation: ${healthData.capacityDegradation.toFixed(1)}%
 • Range Degradation: ${healthData.rangeDegradation.toFixed(1)}%
-• Estimated Range: ${healthData.estimatedRange} km
-
-USAGE METRICS:
-• Total Mileage: ${healthData.totalMileage.toLocaleString()} km
 • Estimated Charge Cycles: ${healthData.estimatedCycles}
-• Cycles per Mile: ${healthData.cyclesPerMile.toFixed(4)}
-
-MARKET IMPACT:
-• Estimated Value Impact: ${healthData.marketImpact.estimatedValueImpact}%
-• Warranty Status: ${healthData.marketImpact.warrantyStatus}
-• Expected Life: ${healthData.marketImpact.expectedLifeRemaining}
+• Current Battery Level: ${healthData.batteryLevel}%
+• Current Range: ${healthData.estimatedRange} km
+• Total Mileage: ${healthData.totalMileage.toLocaleString()} km
 
 STRENGTHS:
 ${healthData.strengths.map(s => `• ${s}`).join('\n')}
@@ -94,30 +133,56 @@ ${healthData.concerns.map(c => `• ${c}`).join('\n')}
 
 RECOMMENDATIONS:
 ${healthData.recommendations.map(r => `• ${r}`).join('\n')}
-    `;
+
+MARKET IMPACT:
+${healthData.marketImpact}
+
+Note: This assessment is based on available vehicle data and industry standards.
+For definitive battery health evaluation, consider professional inspection.
+`;
 
     try {
       await Share.share({
-        message: report,
-        title: 'Tesla Battery Health Report',
+        message: reportText,
+        title: `${vehicleName} Battery Health Report`,
       });
     } catch (error) {
-      console.error('Share failed:', error);
+      console.error('Failed to share report:', error);
+    }
+  };
+
+  const getHealthColor = (score: number): string => {
+    if (score >= 90) return '#4CAF50';
+    if (score >= 75) return '#8BC34A';
+    if (score >= 60) return '#FF9800';
+    return '#F44336';
+  };
+
+  const getGradeColor = (grade: string): string => {
+    switch (grade) {
+      case 'Excellent': return '#4CAF50';
+      case 'Good': return '#8BC34A';
+      case 'Fair': return '#FF9800';
+      case 'Poor': return '#F44336';
+      default: return '#9E9E9E';
     }
   };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2196F3" />
         <Text style={styles.loadingText}>Analyzing battery health...</Text>
       </View>
     );
   }
 
-  if (!healthData) {
+  if (error || !healthData) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Unable to load battery health data</Text>
+        <Text style={styles.errorText}>
+          {error || 'Failed to load health data'}
+        </Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchHealthAssessment}>
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
@@ -191,63 +256,34 @@ ${healthData.recommendations.map(r => `• ${r}`).join('\n')}
           </View>
 
           <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{Math.round(healthData.usableCapacity)}</Text>
-            <Text style={styles.metricLabel}>Usable kWh</Text>
-            <View style={[styles.indicator, { backgroundColor: '#2196F3' }]} />
+            <Text style={styles.metricValue}>{healthData.batteryLevel}%</Text>
+            <Text style={styles.metricLabel}>Current Level</Text>
+            <View style={[styles.indicator, { 
+              backgroundColor: healthData.batteryLevel > 20 ? '#4CAF50' : '#FF9800' 
+            }]} />
           </View>
         </View>
       </View>
 
-      {/* Battery Details */}
-      <View style={styles.detailsSection}>
-        <Text style={styles.sectionTitle}>Battery Details</Text>
-        
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Current Range</Text>
-          <Text style={styles.detailValue}>{healthData.estimatedRange} km</Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Original EPA Range</Text>
-          <Text style={styles.detailValue}>{healthData.epaRange} km</Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Current Capacity</Text>
-          <Text style={styles.detailValue}>{healthData.usableCapacity.toFixed(1)} kWh</Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Original Capacity</Text>
-          <Text style={styles.detailValue}>{healthData.nominalCapacity.toFixed(1)} kWh</Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Total Mileage</Text>
-          <Text style={styles.detailValue}>{healthData.totalMileage.toLocaleString()} km</Text>
-        </View>
-      </View>
-
-      {/* Market Impact */}
-      <View style={styles.marketSection}>
-        <Text style={styles.sectionTitle}>Market Impact Assessment</Text>
-        
-        <View style={styles.marketCard}>
-          <View style={styles.marketRow}>
-            <Text style={styles.marketLabel}>Estimated Value Impact</Text>
-            <Text style={[styles.marketValue, { color: '#F44336' }]}>
-              -{healthData.marketImpact.estimatedValueImpact}%
-            </Text>
+      {/* Current Status */}
+      <View style={styles.statusSection}>
+        <Text style={styles.sectionTitle}>Current Status</Text>
+        <View style={styles.statusGrid}>
+          <View style={styles.statusItem}>
+            <Text style={styles.statusLabel}>Range</Text>
+            <Text style={styles.statusValue}>{healthData.estimatedRange} km</Text>
           </View>
-          
-          <View style={styles.marketRow}>
-            <Text style={styles.marketLabel}>Warranty Status</Text>
-            <Text style={styles.marketValue}>{healthData.marketImpact.warrantyStatus}</Text>
+          <View style={styles.statusItem}>
+            <Text style={styles.statusLabel}>EPA Range</Text>
+            <Text style={styles.statusValue}>{healthData.epaRange} km</Text>
           </View>
-          
-          <View style={styles.marketRow}>
-            <Text style={styles.marketLabel}>Expected Remaining Life</Text>
-            <Text style={styles.marketValue}>{healthData.marketImpact.expectedLifeRemaining}</Text>
+          <View style={styles.statusItem}>
+            <Text style={styles.statusLabel}>Mileage</Text>
+            <Text style={styles.statusValue}>{healthData.totalMileage.toLocaleString()} km</Text>
+          </View>
+          <View style={styles.statusItem}>
+            <Text style={styles.statusLabel}>Charging</Text>
+            <Text style={styles.statusValue}>{healthData.chargingState}</Text>
           </View>
         </View>
       </View>
@@ -289,6 +325,12 @@ ${healthData.recommendations.map(r => `• ${r}`).join('\n')}
         ))}
       </View>
 
+      {/* Market Impact */}
+      <View style={styles.marketSection}>
+        <Text style={styles.sectionTitle}>Market Impact</Text>
+        <Text style={styles.marketText}>{healthData.marketImpact}</Text>
+      </View>
+
       {/* Actions */}
       <View style={styles.actionsSection}>
         <TouchableOpacity style={styles.exportButton} onPress={exportReport}>
@@ -296,7 +338,15 @@ ${healthData.recommendations.map(r => `• ${r}`).join('\n')}
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.refreshButton} onPress={fetchHealthAssessment}>
-          <Text style={styles.refreshButtonText}>Refresh Assessment</Text>
+          <Text style={styles.refreshButtonText}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* NEW: Algorithm Comparison Button */}
+      <View style={styles.comparisonSection}>
+        <TouchableOpacity style={styles.comparisonButton} onPress={navigateToAlgorithmComparison}>
+          <Text style={styles.comparisonButtonText}>🔬 Compare Algorithms</Text>
+          <Text style={styles.comparisonButtonSubtext}>See how different methods analyze your battery</Text>
         </TouchableOpacity>
       </View>
 
@@ -335,6 +385,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#666666',
+    marginTop: 10,
   },
   errorContainer: {
     flex: 1,
@@ -387,15 +438,15 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 18,
     color: '#666666',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   vin: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#999999',
     fontFamily: 'monospace',
   },
@@ -409,7 +460,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 4,
   },
   scoreContainer: {
     alignItems: 'center',
@@ -423,10 +474,9 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    borderWidth: 6,
+    borderWidth: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
     marginBottom: 16,
   },
   scoreText: {
@@ -434,18 +484,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scoreUnit: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666666',
-    marginTop: -4,
   },
   gradeBadge: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 20,
   },
   gradeText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   metricsSection: {
@@ -455,7 +504,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#1A1A1A',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -469,6 +518,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     alignItems: 'center',
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -482,69 +532,47 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666666',
     textAlign: 'center',
-    marginBottom: 8,
   },
   indicator: {
-    width: 24,
-    height: 4,
-    borderRadius: 2,
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  detailsSection: {
-    backgroundColor: '#FFFFFF',
+  statusSection: {
     margin: 16,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
   },
-  detailRow: {
+  statusGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
-  detailLabel: {
-    fontSize: 16,
+  statusItem: {
+    backgroundColor: '#FFFFFF',
+    width: '48%',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statusLabel: {
+    fontSize: 12,
     color: '#666666',
+    marginBottom: 4,
   },
-  detailValue: {
+  statusValue: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1A1A1A',
-  },
-  marketSection: {
-    margin: 16,
-  },
-  marketCard: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
-  },
-  marketRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  marketLabel: {
-    fontSize: 14,
-    color: '#E65100',
-    fontWeight: '500',
-  },
-  marketValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#E65100',
   },
   assessmentSection: {
     margin: 16,
@@ -586,6 +614,22 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     lineHeight: 20,
   },
+  marketSection: {
+    margin: 16,
+  },
+  marketText: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 14,
+    color: '#1A1A1A',
+    lineHeight: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   actionsSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -616,6 +660,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // NEW: Algorithm Comparison Section
+  comparisonSection: {
+    margin: 16,
+  },
+  comparisonButton: {
+    backgroundColor: '#9C27B0',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  comparisonButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  comparisonButtonSubtext: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    opacity: 0.9,
   },
   disclaimer: {
     backgroundColor: '#F0F4F8',
